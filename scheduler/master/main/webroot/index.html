@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Distributed Task Scheduler</title>
+    <!-- bootstrap + jquery -->
+
+    <script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
+    <link href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.bootcss.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+</head>
+<body>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="page-header">
+                <h1>Console<small>Distributed Task Scheduler</small></h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <button type="button" class="btn btn-primary" id="new-job">New Task</button>
+            <button type="button" class="btn btn-success" id="list-worker">List Worker</button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default" style="margin-top: 20px">
+                <div class="panel-body">
+                    <table id="job-list" class="table table-striped">
+                        <thead>
+                        <tr>
+                            <th>Task Name</th>
+                            <th>Shell</th>
+                            <th>Crontab</th>
+                            <th>Operations</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- position: fixed -->
+<div id="edit-modal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Edit Task</h4>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="form-group">
+                        <label for="edit-name">Task Name/label>
+                            <input type="text" class="form-control" id="edit-name" placeholder="Task Name">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-command">shell</label>
+                        <input type="text" class="form-control" id="edit-command" placeholder="SHell">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-cronExpr">crontab</label>
+                        <input type="text" class="form-control" id="edit-cronExpr" placeholder="Crontab">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="save-job">Save</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+<div id="log-modal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Task Logs</h4>
+            </div>
+            <div class="modal-body">
+                <table id="log-list" class="table table-striped">
+                    <thead>
+                    <tr>
+                        <th>Shell</th>
+                        <th>Error</th>
+                        <th>Output</th>
+                        <th>Planed Time</th>
+                        <th>Scheduled Time</th>
+                        <th>Start Time</th>
+                        <th>End Time</th>
+                        <th>Worker IP</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+<div id="worker-modal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">List Worker</h4>
+            </div>
+            <div class="modal-body">
+                <table id="worker-list" class="table table-striped">
+                    <thead>
+                    <tr>
+                        <th>Worker IP</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+<script>
+    $(document).ready(function () {
+        function timeFormat(millsecond) {
+            function paddingNum(num, n) {
+                var len = num.toString().length
+                while (len < n) {
+                    num = '0' + num
+                    len++
+                }
+                return num
+            }
+
+            var date = new Date(millsecond)
+            var year = date.getFullYear()
+            var month = paddingNum(date.getMonth() + 1, 2)
+            var day = paddingNum(date.getDate(), 2)
+            var hour = paddingNum(date.getHours(), 2)
+            var minute = paddingNum(date.getMinutes(), 2)
+            var second = paddingNum(date.getSeconds(), 2)
+            var millsecond = paddingNum(date.getMilliseconds(), 3)
+            return year + "-" + month + "-" + day + " " + hour + ":" + minute + ":" + second + "." + millsecond
+        }
+
+        $("#job-list").on("click", ".edit-job", function (event) {
+            $('#edit-name').val($(this).parents('tr').children('.job-name').text())
+            $('#edit-command').val($(this).parents('tr').children('.job-command').text())
+            $('#edit-cronExpr').val($(this).parents('tr').children('.job-cronExpr').text())
+            $('#edit-modal').modal('show')
+        })
+
+        $("#job-list").on("click", ".delete-job", function (event) { // javascript bind
+            var jobName = $(this).parents("tr").children(".job-name").text()
+            $.ajax({
+                url: '/job/delete',
+                type: 'post',
+                dataType: 'json',
+                data: {name: jobName},
+                complete: function () {
+                    window.location.reload()
+                }
+            })
+        })
+
+        $("#job-list").on("click", ".kill-job", function (event) {
+            var jobName = $(this).parents("tr").children(".job-name").text()
+            $.ajax({
+                url: '/job/kill',
+                type: 'post',
+                dataType: 'json',
+                data: {name: jobName},
+                complete: function () {
+                    window.location.reload()
+                }
+            })
+        })
+
+        $('#save-job').on('click', function () {
+            var jobInfo = {
+                name: $('#edit-name').val(),
+                command: $('#edit-command').val(),
+                cronExpr: $('#edit-cronExpr').val()
+            }
+            $.ajax({
+                url: '/job/save',
+                type: 'post',
+                dataType: 'json',
+                data: {job: JSON.stringify(jobInfo)},
+                complete: function () {
+                    window.location.reload()
+                }
+            })
+        })
+
+        $('#new-job').on('click', function () {
+            $('#edit-name').val("")
+            $('#edit-command').val("")
+            $('#edit-cronExpr').val("")
+            $('#edit-modal').modal('show')
+        })
+
+        $("#job-list").on("click", ".log-job", function (event) {
+
+            $('#log-list tbody').empty()
+
+
+            var jobName = $(this).parents('tr').children('.job-name').text()
+
+            $.ajax({
+                url: "/job/log",
+                dataType: 'json',
+                data: {name: jobName},
+                success: function (resp) {
+                    if (resp.errno != 0) {
+                        return
+                    }
+                    var logList = resp.data
+                    for (var i = 0; i < logList.length; ++i) {
+                        var log = logList[i]
+                        var tr = $('<tr>')
+                        tr.append($('<td>').html(log.command))
+                        tr.append($('<td>').html(log.err))
+                        tr.append($('<td>').html(log.output))
+                        tr.append($('<td>').html(timeFormat(log.planTime)))
+                        tr.append($('<td>').html(timeFormat(log.scheduleTime)))
+                        tr.append($('<td>').html(timeFormat(log.startTime)))
+                        tr.append($('<td>').html(timeFormat(log.endTime)))
+                        tr.append($('<td>').html(log.localIP))
+                        console.log(tr)
+                        $('#log-list tbody').append(tr)
+                    }
+                }
+            })
+
+            $('#log-modal').modal('show')
+        })
+
+        $('#list-worker').on('click', function () {
+            $('#worker-list tbody').empty()
+
+            $.ajax({
+                url: '/worker/list',
+                dataType: 'json',
+                success: function (resp) {
+                    if (resp.errno != 0) {
+                        return
+                    }
+
+                    var workerList = resp.data
+                    for (var i = 0; i < workerList.length; ++i) {
+                        var workerIP = workerList[i]
+                        var tr = $('<tr>')
+                        tr.append($('<td>').html(workerIP))
+                        $('#worker-list tbody').append(tr)
+                    }
+                }
+            })
+
+            $('#worker-modal').modal('show')
+        })
+
+        function rebuildJobList() {
+            // /job/list
+            $.ajax({
+                url: '/job/list',
+                dataType: 'json',
+                success: function (resp) {
+                    if (resp.errno != 0) {
+                        return
+                    }
+                    var jobList = resp.data
+                    $('#job-list tbody').empty()
+                    for (var i = 0; i < jobList.length; ++i) {
+                        var job = jobList[i];
+                        var tr = $("<tr>")
+                        tr.append($('<td class="job-name">').html(job.name))
+                        tr.append($('<td class="job-command">').html(job.command))
+                        tr.append($('<td class="job-cronExpr">').html(job.cronExpr))
+                        var toolbar = $('<div class="btn-toolbar">')
+                            .append('<button class="btn btn-info edit-job">Edit Task</button>')
+                            .append('<button class="btn btn-danger delete-job">Delete Task</button>')
+                            .append('<button class="btn btn-warning kill-job">Kill Task</button>')
+                            .append('<button class="btn btn-success log-job">Logs</button>')
+                        tr.append($('<td>').append(toolbar))
+                        $("#job-list tbody").append(tr)
+                    }
+                }
+            })
+        }
+
+        rebuildJobList()
+    })
+</script>
+
+</body>
+</html>
